@@ -1,7 +1,7 @@
 import OlMap from 'ol/Map';
 import View from 'ol/View';
-import control from 'ol/control';
-import extent from 'ol/extent';
+import { defaults as control_defaults, ScaleLine } from 'ol/control';
+import { buffer as extent_buffer, containsCoordinate as extent_containsCoordinate, getCenter as extent_getCenter } from 'ol/extent';
 import EsriJSON from 'ol/format/EsriJSON';
 import Feature from 'ol/format/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
@@ -20,12 +20,12 @@ import WMSCapabilities from 'ol/format/WMSCapabilities';
 import WMSGetFeatureInfo from 'ol/format/WMSGetFeatureInfo';
 import WMTSCapabilities from 'ol/format/WMTSCapabilities';
 import XML from 'ol/format/XML';
-import interaction from 'ol/interaction';
+import { defaults as interaction_defaults, Select } from 'ol/interaction';
 import HeatmapLayer from 'ol/layer/Heatmap';
 import ImageLayer from 'ol/layer/Image';
 import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import proj from 'ol/proj';
+import { fromLonLat as proj_fromLonLat } from 'ol/proj';
 import ImageWMSSource from 'ol/source/ImageWMS';
 import OSMSource from 'ol/source/OSM';
 import TileImageSource from 'ol/source/TileImage';
@@ -149,8 +149,8 @@ export class Map {
 
   constructor(private config: Config) {
     this.map = new OlMap({
-      controls: control.defaults().extend([new control.ScaleLine()]),
-      interactions: interaction.defaults({
+      controls: control_defaults().extend([new ScaleLine()]),
+      interactions: interaction_defaults({
         altShiftDragRotate: false,
         pinchRotate: false
       })
@@ -169,7 +169,7 @@ export class Map {
 
   setView(center: ol.Coordinate, zoom: number, minZoom: number, maxZoom: number): void {
     this.map.setView(new View({
-      center: proj.fromLonLat(center),
+      center: proj_fromLonLat(center),
       zoom: zoom,
       minZoom: minZoom,
       maxZoom: maxZoom
@@ -192,8 +192,8 @@ export class Map {
 
   featureBufferContainsCoordinate(featureId: string | number, coordinate: ol.Coordinate): boolean {
     const feature = this.mapFeaturesById[featureId];
-    const buffer = extent.buffer(feature.getGeometry().getExtent(), 100);
-    return extent.containsCoordinate(buffer, coordinate);
+    const buffer = extent_buffer(feature.getGeometry().getExtent(), 100);
+    return extent_containsCoordinate(buffer, coordinate);
   }
 
   applyDefaultStyle(featureId: string | number, layer: MapLayer) {
@@ -309,7 +309,7 @@ export class Map {
     if (!layer.olLayer) {
       return;
     }
-    layer.olSelectInteraction = new interaction.Select({
+    layer.olSelectInteraction = new Select({
       // Make this interaction work only for the layer provided
       layers: [layer.olLayer],
       style: (feature: ol.render.Feature | ol.Feature, resolution: number) => {
@@ -329,7 +329,7 @@ export class Map {
 }
 
 export function getFeatureCenterpoint(feature: ol.Feature): ol.Coordinate {
-  return extent.getCenter(feature.getGeometry().getExtent());
+  return extent_getCenter(feature.getGeometry().getExtent());
 }
 
 export function getVectorLayerSource(layer: MapLayer): ol.source.Vector | undefined {
