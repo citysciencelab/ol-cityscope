@@ -10,7 +10,7 @@
     "ol": "^5.3.1"
   },
   "devDependencies": {
-    "typescript": "^3.3.4000"
+    "typescript": "^3.4.2"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

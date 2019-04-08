@@ -1,4 +1,5 @@
 import OlMap from 'ol/Map';
+import Overlay from 'ol/Overlay';
 import View from 'ol/View';
 import { defaults as control_defaults, ScaleLine } from 'ol/control';
 import { buffer as extent_buffer, containsCoordinate as extent_containsCoordinate, getCenter as extent_getCenter } from 'ol/extent';
@@ -109,6 +110,8 @@ export interface MapLayer {
   displayName: string;
   type: 'WMS' | 'OSM' | 'Tile' | 'Vector' | 'Heatmap';
   source: Source;
+  sources?: { [stage: string]: Source };
+  category?: string;
   // Heatmap
   weightAttribute?: string;
   weightAttributeMax?: number;
@@ -129,11 +132,15 @@ export interface MapLayer {
   scale?: { [key: string]: ol.Color };
   scaleAttribute?: string;
   // No config - assigned at runtime
-  olLayer?: ol.layer.Layer;
-  olDefaultStyleFn?: ol.StyleFunction;
-  olSelectedStyleFn?: ol.StyleFunction;
-  olExtraStyleFn?: ol.StyleFunction;
-  olSelectInteraction?: ol.interaction.Select;
+  olLayers: {
+    [stage: string]: {
+      layer: ol.layer.Layer,
+      defaultStyleFn: ol.StyleFunction,
+      selectedStyleFn: ol.StyleFunction,
+      extraStyleFn: ol.StyleFunction,
+      selectInteraction: ol.interaction.Select
+    }
+  };
 }
 
 export interface Config {
@@ -176,6 +183,10 @@ export class Map {
     }));
   }
 
+  setPopUp(popup: Overlay) {
+    this.map.addOverlay(popup);
+  }
+
   getView(): ol.View {
     return this.map.getView();
   }
@@ -196,30 +207,6 @@ export class Map {
     return extent_containsCoordinate(buffer, coordinate);
   }
 
-  applyDefaultStyle(featureId: string | number, layer: MapLayer) {
-    const feature = this.mapFeaturesById[featureId];
-    if (!layer.olDefaultStyleFn) {
-      return;
-    }
-    feature.setStyle(layer.olDefaultStyleFn);
-  }
-
-  applySelectedStyle(featureId: string | number, layer: MapLayer) {
-    const feature = this.mapFeaturesById[featureId];
-    if (!layer.olSelectedStyleFn) {
-      return;
-    }
-    feature.setStyle(layer.olSelectedStyleFn);
-  }
-
-  applyExtraStyle(featureId: string | number, layer: MapLayer) {
-    const feature = this.mapFeaturesById[featureId];
-    if (!layer.olExtraStyleFn) {
-      return;
-    }
-    feature.setStyle(layer.olExtraStyleFn);
-  }
-
   // Conversion from display XY to map coordinates
   getCoordinateFromXY(x: number, y: number): ol.Coordinate | undefined {
     const coordinate = this.map.getCoordinateFromPixel([x * window.innerWidth, y * window.innerHeight]);
@@ -229,33 +216,58 @@ export class Map {
     return coordinate;
   }
 
+  applyDefaultStyle(featureId: string | number, layer: MapLayer) {
+    const feature = this.mapFeaturesById[featureId];
+    for (const olLayer of Object.values(layer.olLayers)) {
+      if (olLayer.defaultStyleFn) {
+        feature.setStyle(olLayer.defaultStyleFn);
+      }
+    }
+  }
+
+  applySelectedStyle(featureId: string | number, layer: MapLayer) {
+    const feature = this.mapFeaturesById[featureId];
+    for (const olLayer of Object.values(layer.olLayers)) {
+      if (olLayer.selectedStyleFn) {
+        feature.setStyle(olLayer.selectedStyleFn);
+      }
+    }
+  }
+
+  applyExtraStyle(featureId: string | number, layer: MapLayer) {
+    const feature = this.mapFeaturesById[featureId];
+    for (const olLayer of Object.values(layer.olLayers)) {
+      if (olLayer.extraStyleFn) {
+        feature.setStyle(olLayer.extraStyleFn);
+      }
+    }
+  }
+
   getSelectedFeatures(coordinate: ol.Coordinate): ol.Feature[] {
     let selectedFeatures: ol.Feature[] = [];
     for (const layer of this.topicLayers) {
-      if (!layer.olLayer) {
-        continue;
-      }
-      const source = layer.olLayer.getSource();
-      if (source.constructor === VectorSource) {
-        const features = (<ol.source.Vector>source).getFeaturesAtCoordinate(coordinate);
-        selectedFeatures = selectedFeatures.concat(features);
+      for (const olLayer of Object.values(layer.olLayers)) {
+        const source = olLayer.layer.getSource();
+        if (source.constructor === VectorSource) {
+          const features = (<VectorSource>source).getFeaturesAtCoordinate(coordinate);
+          selectedFeatures = selectedFeatures.concat(features);
+        }
       }
     }
     return selectedFeatures;
   }
 
   getSelectedLayer(feature: ol.Feature, coordinate: ol.Coordinate): MapLayer | undefined {
-    let selectedLayer = undefined;
+    let selectedLayer;
     for (const layer of this.topicLayers) {
-      if (!layer.olLayer) {
-        continue;
-      }
-      const source = layer.olLayer.getSource();
-      if (source.constructor === VectorSource) {
-        const features = (<ol.source.Vector>source).getFeaturesAtCoordinate(coordinate);
-        if (features.indexOf(feature) > -1) {
-          selectedLayer = layer;
-          break;
+      for (const olLayer of Object.values(layer.olLayers)) {
+      const source = olLayer.layer.getSource();
+        if (source.constructor === VectorSource) {
+          const features = (<VectorSource>source).getFeaturesAtCoordinate(coordinate);
+          if (features.indexOf(feature) > -1) {
+            selectedLayer = layer;
+            break;
+          }
         }
       }
     }
@@ -268,6 +280,42 @@ export class Map {
 
   getTopicLayerByName(name: string): MapLayer | undefined {
     return this.topicLayers.find(layer => layer.name === name);
+  }
+
+  buildPopup(element: HTMLElement) {
+    return new Overlay({
+      element: element,
+      stopEvent: false
+    });
+  }
+
+  showLayers(layerNames: string[], categoryName: string, stageName: string) {
+    for (const layer of this.topicLayers) {
+      if (layer.category === categoryName) {
+        // Set layer visibility
+        layer.visible = layerNames.indexOf(layer.name) > -1;
+        // Show/hide layers
+        for (const [key, olLayer] of Object.entries(layer.olLayers)) {
+          olLayer.layer.setVisible(layer.visible && (key === stageName || key === '*'));
+        }
+      } else {
+        // Hide all other topics
+        for (const olLayer of Object.values(layer.olLayers)) {
+          olLayer.layer.setVisible(false);
+        }
+      }
+    }
+  }
+
+  showLayersNoTopic(layerNames: string[]) {
+    for (const layer of this.topicLayers) {
+      // Set layer visibility
+      layer.visible = layerNames.indexOf(layer.name) > -1;
+      // Show/hide layers
+      for (const olLayer of Object.values(layer.olLayers)) {
+        olLayer.layer.setVisible(layer.visible);
+      }
+    }
   }
 
   /*
@@ -289,42 +337,37 @@ export class Map {
     generateStyles(this.topicLayers);
 
     for (const layer of this.baseLayers.concat(this.topicLayers)) {
-      if (!layer.olLayer) {
-        break;
-      }
-      this.map.addLayer(layer.olLayer);
+      for (const olLayer of Object.values(layer.olLayers)) {
+        this.map.addLayer(olLayer.layer);
 
-      // Set the default/selected styles for each vector layer
-      if (layer.olLayer.constructor === VectorLayer) {
-        (<ol.layer.Vector>layer.olLayer).setStyle(layer.olDefaultStyleFn);
+        // Set the default/selected styles for each vector layer
+        if (olLayer.layer.constructor === VectorLayer) {
+          (<ol.layer.Vector>olLayer.layer).setStyle(olLayer.defaultStyleFn);
 
-        if (layer.selectable) {
-          this.addSelectedStyleOnLayer(layer);
+          if (layer.selectable) {
+            this.addSelectedStyleOnLayer(layer);
+          }
         }
       }
     }
   }
 
   private addSelectedStyleOnLayer(layer: MapLayer): void {
-    if (!layer.olLayer) {
-      return;
-    }
-    layer.olSelectInteraction = new Select({
-      // Make this interaction work only for the layer provided
-      layers: [layer.olLayer],
-      style: (feature: ol.render.Feature | ol.Feature, resolution: number) => {
-        if (!layer.olSelectedStyleFn) {
-          return null;
-        }
-        return layer.olSelectedStyleFn(feature, resolution);
-      },
-      hitTolerance: 8
-    });
+    for (const olLayer of Object.values(layer.olLayers)) {
+      olLayer.selectInteraction = new Select({
+        // Make this interaction work only for the layer provided
+        layers: [olLayer.layer],
+        style: (feature: ol.render.Feature | ol.Feature, resolution: number) => {
+          // if (!olLayer.selectedStyleFn) {
+          //   return null;
+          // }
+          return olLayer.selectedStyleFn(feature, resolution);
+        },
+        hitTolerance: 8
+      });
 
-    if (!layer.olSelectInteraction) {
-      return;
+      this.map.addInteraction(olLayer.selectInteraction);
     }
-    this.map.addInteraction(layer.olSelectInteraction);
   }
 }
 
@@ -332,126 +375,141 @@ export function getFeatureCenterpoint(feature: ol.Feature): ol.Coordinate {
   return extent_getCenter(feature.getGeometry().getExtent());
 }
 
-export function getVectorLayerSource(layer: MapLayer): ol.source.Vector | undefined {
-  if (!layer.olLayer) {
-    return;
-  }
-  const source = <ol.source.Vector>layer.olLayer.getSource();
-  if (source.constructor !== VectorSource) {
-    return;
-  }
-  return source;
-}
-
 export function dispatchSelectEvent(layer: MapLayer, selected: ol.Feature[], coordinate: ol.Coordinate): void {
-  if (!layer.olLayer || !layer.olSelectInteraction) {
-    return;
-  }
-  const source = <ol.source.Vector>layer.olLayer.getSource();
-  if (source.constructor !== VectorSource) {
-    return;
-  }
-  const deselected = source.getFeatures().filter(feature => selected.indexOf(feature) === -1);
-
-  const selectEvent = <ol.interaction.Select.Event>{
-    type: 'select',
-    selected: selected,
-    deselected: deselected,
-    mapBrowserEvent: {
-      coordinate: coordinate
+  for (const olLayer of Object.values(layer.olLayers)) {
+    const source = <VectorSource>olLayer.layer.getSource();
+    if (source.constructor !== VectorSource) {
+      throw new Error('Cannot find features: Source is not a vector source');
     }
-  };
-  layer.olSelectInteraction.dispatchEvent(selectEvent);
+    const deselected = source.getFeatures().filter(feature => selected.indexOf(feature) === -1);
+
+    const selectEvent = <ol.interaction.Select.Event>{
+      type: 'select',
+      selected: selected,
+      deselected: deselected,
+      mapBrowserEvent: {
+        coordinate: coordinate
+      }
+    };
+    olLayer.selectInteraction.dispatchEvent(selectEvent);
+  }
 }
 
 export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
   return layersConfig.map(layer => {
-    // Create the OpenLayers layer
-    switch (layer.type) {
-      case 'OSM':
-        layer.olLayer = new TileLayer({
-          source: new OSMSource({
-            url: layer.source.url ? layer.source.url : undefined
-          }),
-          opacity: layer.opacity,
-          zIndex: layer.zIndex,
-          visible: layer.visible
-        });
-        break;
-      case 'Tile':
-        layer.olLayer = new TileLayer({
-          source: new TileImageSource({
-            url: layer.source.url,
-            projection: layer.source.projection
-          }),
-          opacity: layer.opacity,
-          zIndex: layer.zIndex,
-          visible: layer.visible
-        });
-        break;
-      case 'WMS':
-        if (!layer.source.wmsParams) {
-          throw new Error('No WMS params defined for layer ' + layer.name);
-        }
-        if (layer.source.wmsParams.TILED) {
-          layer.olLayer = new TileLayer({
-            source: new TileWMSSource({
-              url: layer.source.url,
-              params: layer.source.wmsParams
+    // Normalize the config fields
+    if (!layer.sources) {
+      layer.sources = {};
+    }
+    if (layer.source) {
+      if (!layer.sources.hasOwnProperty('*')) {
+        layer.sources['*'] = layer.source;
+      } else {
+        console.warn('Not overriding the "*" source with "source" value in layer ' + layer.name);
+      }
+    }
+    return layer;
+  }).map(layer => {
+    // Create the OpenLayers layers
+    layer.olLayers = {};
+    const sourceEntries = Object.entries(layer.sources || {}); // layer.sources won't be empty; just for tslint
+    if (sourceEntries.length === 0) {
+      throw new Error('No sources provided for layer ' + layer.name);
+    }
+    for (const [key, source] of sourceEntries) {
+      const olLayer = layer.olLayers[key] = {
+        layer: null,
+        defaultStyleFn: null,
+        selectedStyleFn: null,
+        extraStyleFn: null,
+        selectInteraction: null
+      };
+      switch (layer.type) {
+        case 'OSM':
+          olLayer.layer = new TileLayer({
+            source: new OSMSource({
+              url: source.url ? source.url : undefined
+            }),
+            opacity: layer.opacity,
+            zIndex: layer.zIndex,
+            visible: false
+          });
+          break;
+        case 'Tile':
+          olLayer.layer = new TileLayer({
+            source: new TileImageSource({
+              url: source.url,
+              projection: source.projection
             }),
             opacity: layer.opacity,
             zIndex: layer.zIndex,
             visible: layer.visible
           });
-        } else {
-          layer.olLayer = new ImageLayer({
-            source: new ImageWMSSource({
-              url: layer.source.url,
-              params: layer.source.wmsParams,
-              projection: layer.source.wmsProjection
+          break;
+        case 'WMS':
+          if (!source.wmsParams) {
+            throw new Error('No WMS params defined for layer ' + layer.name);
+          }
+          if (source.wmsParams.TILED) {
+            olLayer.layer = new TileLayer({
+              source: new TileWMSSource({
+                url: source.url,
+                params: source.wmsParams
+              }),
+              opacity: layer.opacity,
+              zIndex: layer.zIndex,
+              visible: layer.visible
+            });
+          } else {
+            olLayer.layer = new ImageLayer({
+              source: new ImageWMSSource({
+                url: source.url,
+                params: source.wmsParams,
+                projection: source.wmsProjection
+              }),
+              opacity: layer.opacity,
+              zIndex: layer.zIndex,
+              visible: layer.visible
+            });
+          }
+          break;
+        case 'Vector':
+          if (!source.format || typeof formats[source.format] !== 'function') {
+            throw new Error('No vector format provided for layer ' + layer.name);
+          }
+          olLayer.layer = new VectorLayer({
+            renderMode: 'image', // for performance
+            source: new VectorSource({
+              url: source.url,
+              format: new formats[source.format]()
             }),
             opacity: layer.opacity,
             zIndex: layer.zIndex,
             visible: layer.visible
           });
-        }
-        break;
-      case 'Vector':
-        if (!layer.source.format || typeof formats[layer.source.format] !== 'function') {
-          throw new Error('No vector format provided for layer ' + layer.name);
-        }
-        layer.olLayer = new VectorLayer({
-          renderMode: 'image', // for performance
-          source: new VectorSource({
-            url: layer.source.url,
-            format: new formats[layer.source.format]()
-          }),
-          opacity: layer.opacity,
-          zIndex: layer.zIndex,
-          visible: layer.visible
-        });
-        break;
-      case 'Heatmap':
-        if (!layer.source.format) {
-          throw new Error('No vector format provided for layer ' + layer.name);
-        }
-        if (!layer.weightAttribute || !layer.weightAttributeMax) {
-          throw new Error('No weight attribute provided for layer ' + layer.name);
-        }
-        layer.olLayer = new HeatmapLayer({
-          source: new VectorSource({
-            url: layer.source.url,
-            format: new formats[layer.source.format]()
-          }),
-          weight: layer.weightAttribute ? (feature: ol.Feature) => feature.get(layer.weightAttribute || '') / (layer.weightAttributeMax || 1) : () => 1,
-          gradient: layer.gradient && layer.gradient.length > 1 ? layer.gradient : ['#0ff', '#0f0', '#ff0', '#f00'],
-          radius: layer.radius !== undefined ? layer.radius : 16,
-          blur: layer.blur !== undefined ? layer.blur : 30,
-          opacity: layer.opacity,
-          zIndex: layer.zIndex,
-          visible: layer.visible
-        });
-        break;
+          break;
+        case 'Heatmap':
+          if (!source.format) {
+            throw new Error('No vector format provided for layer ' + layer.name);
+          }
+          if (!layer.weightAttribute || !layer.weightAttributeMax) {
+            throw new Error('No weight attribute provided for layer ' + layer.name);
+          }
+          olLayer.layer = new HeatmapLayer({
+            source: new VectorSource({
+              url: source.url,
+              format: new formats[source.format]()
+            }),
+            weight: layer.weightAttribute ? (feature: ol.Feature) => feature.get(layer.weightAttribute || '') / (layer.weightAttributeMax || 1) : () => 1,
+            gradient: layer.gradient && layer.gradient.length > 1 ? layer.gradient : ['#0ff', '#0f0', '#ff0', '#f00'],
+            radius: layer.radius !== undefined ? layer.radius : 16,
+            blur: layer.blur !== undefined ? layer.blur : 30,
+            opacity: layer.opacity,
+            zIndex: layer.zIndex,
+            visible: layer.visible
+          });
+          break;
+      }
     }
     return layer;
   }) || [];
@@ -459,14 +517,16 @@ export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
 
 export function generateStyles(layers: MapLayer[]) {
   for (const layer of layers) {
-    if (layer.style) {
-      layer.olDefaultStyleFn = styleConfigToStyleFunction(layer.style, layer.scale, layer.scaleAttribute);
-    }
-    if (layer.selectedStyle) {
-      layer.olSelectedStyleFn = styleConfigToStyleFunction(layer.selectedStyle, layer.scale, layer.scaleAttribute);
-    }
-    if (layer.extraStyle) {
-      layer.olExtraStyleFn = styleConfigToStyleFunction(layer.extraStyle, layer.scale, layer.scaleAttribute);
+    for (const olLayer of Object.values(layer.olLayers)) {
+      if (layer.style) {
+        olLayer.defaultStyleFn = styleConfigToStyleFunction(layer.style, layer.scale, layer.scaleAttribute);
+      }
+      if (layer.selectedStyle) {
+        olLayer.selectedStyleFn = styleConfigToStyleFunction(layer.selectedStyle, layer.scale, layer.scaleAttribute);
+      }
+      if (layer.extraStyle) {
+        olLayer.extraStyleFn = styleConfigToStyleFunction(layer.extraStyle, layer.scale, layer.scaleAttribute);
+      }
     }
   }
 }
