@@ -176,31 +176,21 @@ export class Map {
             stopEvent: false
         });
     }
-    showLayersByCategory(layerNames, categoryName, stageName) {
-        for (const layer of this.topicLayers) {
-            if (layer.category === categoryName) {
-                // Set layer visibility
-                layer.visible = layerNames.indexOf(layer.name) > -1;
-                // Show/hide layers
-                for (const [key, olLayer] of Object.entries(layer.olLayers)) {
-                    olLayer.layer.setVisible(layer.visible && (key === stageName || key === '*'));
-                }
-            }
-            else {
-                // Hide all other categories
-                for (const olLayer of Object.values(layer.olLayers)) {
-                    olLayer.layer.setVisible(false);
-                }
-            }
-        }
-    }
-    showLayers(layerNames) {
-        for (const layer of this.topicLayers) {
-            // Set layer visibility
-            layer.visible = layerNames.indexOf(layer.name) > -1;
-            // Show/hide layers
+    /**
+     * Show/hide layers according to their "visible" property and (optionally) their category and stage.
+     * Set "category" to null to show no layers at all
+     */
+    syncVisibleLayers(category, stage) {
+        for (const layer of this.baseLayers) {
             for (const olLayer of Object.values(layer.olLayers)) {
                 olLayer.layer.setVisible(layer.visible);
+            }
+        }
+        for (const layer of this.topicLayers) {
+            for (const [key, olLayer] of Object.entries(layer.olLayers)) {
+                olLayer.layer.setVisible(layer.visible
+                    && (category !== null ? layer.category === category || !category : false)
+                    && (key === stage || key === '*'));
             }
         }
     }
@@ -310,7 +300,7 @@ export function generateLayers(layersConfig) {
                         }),
                         opacity: layer.opacity,
                         zIndex: layer.zIndex,
-                        visible: false
+                        visible: layer.visible
                     });
                     break;
                 case 'Tile':
