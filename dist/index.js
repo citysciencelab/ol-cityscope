@@ -25,7 +25,7 @@ import HeatmapLayer from 'ol/layer/Heatmap';
 import ImageLayer from 'ol/layer/Image';
 import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import { fromLonLat as proj_fromLonLat } from 'ol/proj';
+import { fromLonLat as proj_fromLonLat, toLonLat as proj_toLonLat } from 'ol/proj';
 import ImageWMSSource from 'ol/source/ImageWMS';
 import OSMSource from 'ol/source/OSM';
 import TileImageSource from 'ol/source/TileImage';
@@ -205,10 +205,16 @@ export class Map {
         }
     }
     /*
-     * Zoom out, fly to the feature, zoom in
+     * transform xy to lon/lat
      */
-    zoomTo(coordinate, zoom1, zoom2) {
-        this.map.getView().animate({ zoom: zoom1 }, { center: coordinate }, { zoom: zoom2 });
+    fromLonLat(coordinate) {
+        return proj_fromLonLat(coordinate);
+    }
+    /*
+     * transform lon/lat to xy
+     */
+    toLonLat(coordinate) {
+        return proj_toLonLat(coordinate);
     }
     addLayers(baseLayersConfig, topicLayersConfig) {
         this.baseLayers = generateLayers(baseLayersConfig);
