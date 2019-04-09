@@ -211,7 +211,12 @@ export class Map {
         this.topicLayers = generateLayers(topicLayersConfig);
         generateStyles(this.baseLayers);
         generateStyles(this.topicLayers);
-        for (const layer of this.baseLayers.concat(this.topicLayers)) {
+        for (const layer of this.baseLayers) {
+            for (const olLayer of Object.values(layer.olLayers)) {
+                this.map.addLayer(olLayer.layer);
+            }
+        }
+        for (const layer of this.topicLayers) {
             for (const olLayer of Object.values(layer.olLayers)) {
                 this.map.addLayer(olLayer.layer);
                 // Set the default/selected styles for each vector layer
@@ -230,9 +235,6 @@ export class Map {
                 // Make this interaction work only for the layer provided
                 layers: [olLayer.layer],
                 style: (feature, resolution) => {
-                    // if (!olLayer.selectedStyleFn) {
-                    //   return null;
-                    // }
                     return olLayer.selectedStyleFn(feature, resolution);
                 },
                 hitTolerance: 8

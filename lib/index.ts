@@ -329,7 +329,12 @@ export class Map {
     generateStyles(this.baseLayers);
     generateStyles(this.topicLayers);
 
-    for (const layer of this.baseLayers.concat(this.topicLayers)) {
+    for (const layer of this.baseLayers) {
+      for (const olLayer of Object.values(layer.olLayers)) {
+        this.map.addLayer(olLayer.layer);
+      }
+    }
+    for (const layer of this.topicLayers) {
       for (const olLayer of Object.values(layer.olLayers)) {
         this.map.addLayer(olLayer.layer);
 
@@ -351,9 +356,6 @@ export class Map {
         // Make this interaction work only for the layer provided
         layers: [olLayer.layer],
         style: (feature: ol.render.Feature | ol.Feature, resolution: number) => {
-          // if (!olLayer.selectedStyleFn) {
-          //   return null;
-          // }
           return olLayer.selectedStyleFn(feature, resolution);
         },
         hitTolerance: 8
