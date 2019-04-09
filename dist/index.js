@@ -176,7 +176,7 @@ export class Map {
             stopEvent: false
         });
     }
-    showLayers(layerNames, categoryName, stageName) {
+    showLayersByCategory(layerNames, categoryName, stageName) {
         for (const layer of this.topicLayers) {
             if (layer.category === categoryName) {
                 // Set layer visibility
@@ -187,14 +187,14 @@ export class Map {
                 }
             }
             else {
-                // Hide all other topics
+                // Hide all other categories
                 for (const olLayer of Object.values(layer.olLayers)) {
                     olLayer.layer.setVisible(false);
                 }
             }
         }
     }
-    showLayersNoTopic(layerNames) {
+    showLayers(layerNames) {
         for (const layer of this.topicLayers) {
             // Set layer visibility
             layer.visible = layerNames.indexOf(layer.name) > -1;

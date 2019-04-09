@@ -289,7 +289,7 @@ export class Map {
     });
   }
 
-  showLayers(layerNames: string[], categoryName: string, stageName: string) {
+  showLayersByCategory(layerNames: string[], categoryName: string, stageName?: string) {
     for (const layer of this.topicLayers) {
       if (layer.category === categoryName) {
         // Set layer visibility
@@ -299,7 +299,7 @@ export class Map {
           olLayer.layer.setVisible(layer.visible && (key === stageName || key === '*'));
         }
       } else {
-        // Hide all other topics
+        // Hide all other categories
         for (const olLayer of Object.values(layer.olLayers)) {
           olLayer.layer.setVisible(false);
         }
@@ -307,7 +307,7 @@ export class Map {
     }
   }
 
-  showLayersNoTopic(layerNames: string[]) {
+  showLayers(layerNames: string[]) {
     for (const layer of this.topicLayers) {
       // Set layer visibility
       layer.visible = layerNames.indexOf(layer.name) > -1;
