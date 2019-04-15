@@ -622,7 +622,7 @@ export function getColorFromGraduatedScale(feature: ol.render.Feature | ol.Featu
   if (!attribute) {
     throw new Error('Cannot apply style: scale attribute is not defined');
   }
-  let value = Number(feature.get(attribute).replace(",","."));
+  let value = Number(String(feature.get(attribute)).replace(",","."));
   if (value === null) {
       value = 0;
   }
