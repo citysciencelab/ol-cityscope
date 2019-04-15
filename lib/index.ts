@@ -622,12 +622,14 @@ export function getColorFromGraduatedScale(feature: ol.render.Feature | ol.Featu
   if (!attribute) {
     throw new Error('Cannot apply style: scale attribute is not defined');
   }
-  let value = feature.get(attribute);
+  let value = Number(feature.get(attribute).replace(",","."));
   if (value === null) {
-    value = 0;
+      value = 0;
   }
-  if (typeof value !== 'number') {
-    throw new Error('Cannot apply style: value is not a number');
+  if (isNaN(value))//typeof value !== 'number') 
+  {
+      console.error('Cannot apply style: value is not a number');
+      return [0, 0, 0, 0];
   }
   return Object.keys(scale).reduce((previous, current) => {
     const limit = parseInt(current, 10);
