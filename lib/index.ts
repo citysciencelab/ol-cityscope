@@ -627,7 +627,8 @@ export function getColorFromGraduatedScale(feature: ol.render.Feature | ol.Featu
     value = 0;
   }
   if (typeof value !== 'number') {
-    throw new Error('Cannot apply style: value is not a number');
+    console.error('Cannot apply style: value is not a number');
+    return  <ol.Color>[0, 0, 0, 0];
   }
   return Object.keys(scale).reduce((previous, current) => {
     const limit = parseInt(current, 10);
