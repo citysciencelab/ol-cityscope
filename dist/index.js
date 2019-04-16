@@ -70,6 +70,7 @@ export class Map {
             })
         });
         this.addLayers(this.config.baseLayers, this.config.topicLayers);
+        this.addSelectInteraction();
     }
     on(type, listener) {
         this.map.on(type, listener);
@@ -170,6 +171,24 @@ export class Map {
     getTopicLayerByName(name) {
         return this.topicLayers.find(layer => layer.name === name);
     }
+    getOlLayerByFeature(feature) {
+        // This becomes problematic as soon as more than one layer is using the same data source ...
+        let matchingLayer;
+        for (const layer of this.topicLayers) {
+            if (layer.type !== 'Vector') {
+                continue;
+            }
+            for (const olLayer of Object.values(layer.olLayers)) {
+                const source = olLayer.layer.getSource();
+                source.forEachFeature((f) => {
+                    if (feature.getId() === f.getId()) {
+                        matchingLayer = olLayer;
+                    }
+                });
+            }
+        }
+        return matchingLayer;
+    }
     buildPopup(element) {
         return new Overlay({
             element: element,
@@ -222,48 +241,56 @@ export class Map {
                 // Set the default/selected styles for each vector layer
                 if (olLayer.layer.constructor === VectorLayer) {
                     olLayer.layer.setStyle(olLayer.defaultStyleFn);
-                    if (layer.selectable) {
-                        this.addSelectedStyleOnLayer(layer);
-                    }
                 }
             }
         }
     }
-    addSelectedStyleOnLayer(layer) {
-        for (const olLayer of Object.values(layer.olLayers)) {
-            olLayer.selectInteraction = new Select({
-                // Make this interaction work only for the layer provided
-                layers: [olLayer.layer],
-                style: (feature, resolution) => {
-                    return olLayer.selectedStyleFn(feature, resolution);
-                },
-                hitTolerance: 8
-            });
-            this.map.addInteraction(olLayer.selectInteraction);
-        }
+    addSelectInteraction() {
+        this.selectInteraction = new Select({
+            // Selectable layers
+            layers: this.topicLayers.filter(layer => layer.selectable).reduce((layers, layer) => {
+                layers.push(...Object.values(layer.olLayers).map(olLayer => olLayer.layer));
+                return layers;
+            }, []),
+            // Because multiple select interactions for different layers don't work,
+            // the layer needs to be determined within the style function. This way we can
+            // use the styling associated with the layer the selected feature belongs to.
+            style: (feature, resolution) => {
+                const selectedLayer = this.getOlLayerByFeature(feature);
+                if (!selectedLayer) {
+                    return;
+                }
+                if (typeof selectedLayer.selectedStyleFn !== 'function') {
+                    return;
+                }
+                return selectedLayer.selectedStyleFn(feature, resolution);
+            },
+            hitTolerance: 8
+        });
+        this.map.addInteraction(this.selectInteraction);
     }
 }
 export function getFeatureCenterpoint(feature) {
     return extent_getCenter(feature.getGeometry().getExtent());
 }
-export function dispatchSelectEvent(layer, selected, coordinate) {
-    for (const olLayer of Object.values(layer.olLayers)) {
-        const source = olLayer.layer.getSource();
-        if (source.constructor !== VectorSource) {
-            throw new Error('Cannot find features: Source is not a vector source');
-        }
-        const deselected = source.getFeatures().filter(feature => selected.indexOf(feature) === -1);
-        const selectEvent = {
-            type: 'select',
-            selected: selected,
-            deselected: deselected,
-            mapBrowserEvent: {
-                coordinate: coordinate
-            }
-        };
-        olLayer.selectInteraction.dispatchEvent(selectEvent);
-    }
-}
+// export function dispatchSelectEvent(layer: MapLayer, selected: ol.Feature[], coordinate: ol.Coordinate): void {
+//   for (const olLayer of Object.values(layer.olLayers)) {
+//     const source = <VectorSource>olLayer.layer.getSource();
+//     if (source.constructor !== VectorSource) {
+//       throw new Error('Cannot find features: Source is not a vector source');
+//     }
+//     const deselected = source.getFeatures().filter(feature => selected.indexOf(feature) === -1);
+//     const selectEvent = <ol.interaction.Select.Event>{
+//       type: 'select',
+//       selected: selected,
+//       deselected: deselected,
+//       mapBrowserEvent: {
+//         coordinate: coordinate
+//       }
+//     };
+//     olLayer.selectInteraction.dispatchEvent(selectEvent);
+//   }
+// }
 export function generateLayers(layersConfig) {
     return layersConfig.map(layer => {
         // Normalize the config fields
@@ -291,8 +318,7 @@ export function generateLayers(layersConfig) {
                 layer: null,
                 defaultStyleFn: null,
                 selectedStyleFn: null,
-                extraStyleFn: null,
-                selectInteraction: null
+                extraStyleFn: null
             };
             switch (layer.type) {
                 case 'OSM':
