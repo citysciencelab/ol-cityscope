@@ -153,6 +153,7 @@ export class Map {
   selectInteraction: ol.interaction.Select;
   mapFeaturesById: { [key: string]: ol.Feature } = {};
   private map: ol.Map;
+  private selectedLayer: ol.layer.Layer;
 
   constructor(private config: Config) {
     this.map = new OlMap({
@@ -283,25 +284,6 @@ export class Map {
     return this.topicLayers.find(layer => layer.name === name);
   }
 
-  getOlLayerByFeature(feature: ol.Feature): { layer: ol.layer.Layer, defaultStyleFn: ol.StyleFunction, selectedStyleFn: ol.StyleFunction, extraStyleFn: ol.StyleFunction } | undefined {
-    // This becomes problematic as soon as more than one layer is using the same data source ...
-    let matchingLayer;
-    for (const layer of this.topicLayers) {
-      if (layer.type !== 'Vector') {
-        continue;
-      }
-      for (const olLayer of Object.values(layer.olLayers)) {
-        const source = <ol.source.Vector>olLayer.layer.getSource();
-        source.forEachFeature((f: ol.Feature) => {
-          if (feature.getId() === f.getId()) {
-            matchingLayer = olLayer;
-          }
-        });
-      }
-    }
-    return matchingLayer;
-  }
-
   buildPopup(element: HTMLElement) {
     return new Overlay({
       element: element,
@@ -373,18 +355,30 @@ export class Map {
         layers.push(... Object.values(layer.olLayers).map(olLayer => olLayer.layer));
         return layers;
       }, []),
+      // The filter function is hijacked in order to extract the association of the
+      // selected feature and the layer it belongs to, which is needed to define the
+      // style function (see below)
+      filter: (feature: ol.render.Feature | ol.Feature, layer: ol.layer.Layer) => {
+        this.selectedLayer = layer;
+        return true;
+      },
       // Because multiple select interactions for different layers don't work,
       // the layer needs to be determined within the style function. This way we can
       // use the styling associated with the layer the selected feature belongs to.
       style: (feature: ol.render.Feature | ol.Feature, resolution: number) => {
-        const selectedLayer = this.getOlLayerByFeature(feature);
-        if (!selectedLayer) {
+        let selectedStyleFn;
+        for (const layer of this.topicLayers) {
+          for (const olLayer of Object.values(layer.olLayers)) {
+            if (olLayer.layer.ol_uid === this.selectedLayer.ol_uid) {
+              selectedStyleFn = olLayer.selectedStyleFn;
+              break;
+            }
+          }
+        }
+        if (typeof selectedStyleFn !== 'function') {
           return;
         }
-        if (typeof selectedLayer.selectedStyleFn !== 'function') {
-          return;
-        }
-        return selectedLayer.selectedStyleFn(feature, resolution);
+        return selectedStyleFn(feature, resolution);
       },
       hitTolerance: 8
     });
