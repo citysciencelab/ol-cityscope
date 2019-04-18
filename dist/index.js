@@ -207,6 +207,27 @@ export class Map {
     toLonLat(coordinate) {
         return proj_toLonLat(coordinate);
     }
+    /*
+     * Create and dispatch a fake select event
+     */
+    dispatchSelectEvent(layer, selected, coordinate) {
+        for (const olLayer of Object.values(layer.olLayers)) {
+            const source = olLayer.layer.getSource();
+            if (source.constructor !== VectorSource) {
+                throw new Error('Cannot find features: Source is not a vector source');
+            }
+            const deselected = source.getFeatures().filter(feature => selected.indexOf(feature) === -1);
+            const selectEvent = {
+                type: 'select',
+                selected: selected,
+                deselected: deselected,
+                mapBrowserEvent: {
+                    coordinate: coordinate
+                }
+            };
+            this.selectInteraction.dispatchEvent(selectEvent);
+        }
+    }
     addLayers(baseLayersConfig, topicLayersConfig) {
         this.baseLayers = generateLayers(baseLayersConfig);
         this.topicLayers = generateLayers(topicLayersConfig);
@@ -267,24 +288,6 @@ export class Map {
 export function getFeatureCenterpoint(feature) {
     return extent_getCenter(feature.getGeometry().getExtent());
 }
-// export function dispatchSelectEvent(layer: MapLayer, selected: ol.Feature[], coordinate: ol.Coordinate): void {
-//   for (const olLayer of Object.values(layer.olLayers)) {
-//     const source = <VectorSource>olLayer.layer.getSource();
-//     if (source.constructor !== VectorSource) {
-//       throw new Error('Cannot find features: Source is not a vector source');
-//     }
-//     const deselected = source.getFeatures().filter(feature => selected.indexOf(feature) === -1);
-//     const selectEvent = <ol.interaction.Select.Event>{
-//       type: 'select',
-//       selected: selected,
-//       deselected: deselected,
-//       mapBrowserEvent: {
-//         coordinate: coordinate
-//       }
-//     };
-//     olLayer.selectInteraction.dispatchEvent(selectEvent);
-//   }
-// }
 export function generateLayers(layersConfig) {
     return layersConfig.map(layer => {
         // Normalize the config fields
