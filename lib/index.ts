@@ -652,10 +652,9 @@ export function getColorFromGraduatedScale(feature: ol.render.Feature | ol.Featu
   if (value === null) {
       value = 0;
   }
-  if (isNaN(value))//typeof value !== 'number') 
-  {
-      console.error('Cannot apply style: value is not a number');
-      return [0, 0, 0, 0];
+  if (isNaN(value)) {
+    console.warn('Cannot apply style: value is not a number');
+    return <ol.Color>[0, 0, 0, 0];
   }
   return Object.keys(scale).reduce((previous, current) => {
     const limit = parseInt(current, 10);
@@ -663,5 +662,5 @@ export function getColorFromGraduatedScale(feature: ol.render.Feature | ol.Featu
       return previous;
     }
     return scale[current];
-  }, <ol.Color>[0, 0, 0, 1]);
+  }, <ol.Color>[0, 0, 0, 0]);
 }

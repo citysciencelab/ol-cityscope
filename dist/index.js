@@ -520,9 +520,8 @@ export function getColorFromGraduatedScale(feature, attribute, scale) {
     if (value === null) {
         value = 0;
     }
-    if (isNaN(value)) //typeof value !== 'number') 
-     {
-        console.error('Cannot apply style: value is not a number');
+    if (isNaN(value)) {
+        console.warn('Cannot apply style: value is not a number');
         return [0, 0, 0, 0];
     }
     return Object.keys(scale).reduce((previous, current) => {
@@ -531,5 +530,5 @@ export function getColorFromGraduatedScale(feature, attribute, scale) {
             return previous;
         }
         return scale[current];
-    }, [0, 0, 0, 1]);
+    }, [0, 0, 0, 0]);
 }
