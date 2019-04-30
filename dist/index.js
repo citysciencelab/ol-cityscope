@@ -26,6 +26,7 @@ import ImageLayer from 'ol/layer/Image';
 import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat as proj_fromLonLat, toLonLat as proj_toLonLat } from 'ol/proj';
+import { register as proj4_register } from 'ol/proj/proj4';
 import ImageWMSSource from 'ol/source/ImageWMS';
 import OSMSource from 'ol/source/OSM';
 import TileImageSource from 'ol/source/TileImage';
@@ -37,6 +38,7 @@ import IconStyle from 'ol/style/Icon';
 import StrokeStyle from 'ol/style/Stroke';
 import Style from 'ol/style/Style';
 import TextStyle from 'ol/style/Text';
+import { default as proj4 } from 'proj4';
 const formats = {
     'EsriJSON': EsriJSON,
     'GeoJSON': GeoJSON,
@@ -56,12 +58,20 @@ const formats = {
     'WMTSCapabilities': WMTSCapabilities,
     'XML': XML
 };
+const supportedProjections = {
+    'EPSG:25832': '+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'
+};
 export class Map {
     constructor(config) {
         this.config = config;
         this.baseLayers = [];
         this.topicLayers = [];
         this.mapFeaturesById = {};
+        // Register unknown map projections
+        for (const [code, def] of Object.entries(supportedProjections)) {
+            proj4.defs(code, def);
+        }
+        proj4_register(proj4);
         this.map = new OlMap({
             controls: control_defaults().extend([new ScaleLine()]),
             interactions: interaction_defaults({
