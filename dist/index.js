@@ -518,6 +518,10 @@ export function getColorFromCategorizedScale(feature, attribute, scale) {
     if (!attribute) {
         throw new Error('Cannot apply style: scale attribute is not defined');
     }
+    if (!feature.get(attribute)) {
+        console.warn("Cannot apply style: null value in properties");
+        return [0, 0, 0, 0];
+    }
     return scale[feature.get(attribute)];
 }
 export function getColorFromGraduatedScale(feature, attribute, scale) {
