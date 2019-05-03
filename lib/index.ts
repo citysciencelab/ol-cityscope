@@ -652,6 +652,11 @@ export function getColorFromCategorizedScale(feature: ol.render.Feature | ol.Fea
   if (!attribute) {
     throw new Error('Cannot apply style: scale attribute is not defined');
   }
+  if(!feature.get(attribute))
+  {
+    console.warn("Cannot apply style: null value in properties");
+    return <ol.Color>[0, 0, 0, 0];
+  }
   return scale[feature.get(attribute)];
 }
 
