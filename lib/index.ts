@@ -613,8 +613,8 @@ export function styleConfigToStyleFunction(style: LayerStyle, scale: { [key: str
     stroke: style.stroke ? getStroke(feature) : undefined,
     image: style.circle ? new CircleStyle({
       radius: style.circle.radius,
-      fill: new FillStyle(style.circle.fill),
-      stroke: new StrokeStyle(style.circle.stroke)
+      fill: style.fill ? getFill(feature) : new FillStyle(style.circle.fill),
+      stroke: style.stroke ? getStroke(feature) : new StrokeStyle(style.circle.stroke)
     }) : style.icon ? new IconStyle({
       src: style.icon.src,
       anchor: style.icon.anchor
