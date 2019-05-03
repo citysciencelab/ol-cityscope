@@ -309,8 +309,8 @@ export class Map {
    */
   syncVisibleLayers(category?: string, stage?: string) {
     for (const layer of this.baseLayers) {
-      for (const olLayer of Object.values(layer.olLayers)) {
-        olLayer.layer.setVisible(layer.visible);
+      for (const [key, olLayer] of Object.entries(layer.olLayers)) {
+          olLayer.layer.setVisible(layer.visible&& (key === stage || key === '*'));
       }
     }
     for (const layer of this.topicLayers) {
