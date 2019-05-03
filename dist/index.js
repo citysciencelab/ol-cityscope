@@ -246,6 +246,10 @@ export class Map {
         for (const layer of this.baseLayers) {
             for (const olLayer of Object.values(layer.olLayers)) {
                 this.map.addLayer(olLayer.layer);
+                // Set the default/selected styles for each vector layer
+                if (olLayer.layer.constructor === VectorLayer) {
+                    olLayer.layer.setStyle(olLayer.defaultStyleFn);
+                }
             }
         }
         for (const layer of this.topicLayers) {
