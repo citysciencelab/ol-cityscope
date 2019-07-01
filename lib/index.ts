@@ -1,10 +1,16 @@
+import * as proj4 from 'proj4';
+import { getUid } from 'ol';
+import { default as Feature, FeatureLike } from 'ol/Feature';
 import OlMap from 'ol/Map';
 import Overlay from 'ol/Overlay';
 import View from 'ol/View';
+import { Color } from 'ol/color';
+import { Coordinate } from 'ol/coordinate';
 import { defaults as control_defaults, ScaleLine } from 'ol/control';
+import { ListenerFunction } from 'ol/events';
 import { buffer as extent_buffer, containsCoordinate as extent_containsCoordinate, getCenter as extent_getCenter } from 'ol/extent';
 import EsriJSON from 'ol/format/EsriJSON';
-import Feature from 'ol/format/Feature';
+import FeatureFormat from 'ol/format/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import GML2 from 'ol/format/GML2';
 import GML3 from 'ol/format/GML3';
@@ -17,17 +23,17 @@ import Polyline from 'ol/format/Polyline';
 import TopoJSON from 'ol/format/TopoJSON';
 import WFS from 'ol/format/WFS';
 import WKT from 'ol/format/WKT';
-import WMSCapabilities from 'ol/format/WMSCapabilities';
 import WMSGetFeatureInfo from 'ol/format/WMSGetFeatureInfo';
-import WMTSCapabilities from 'ol/format/WMTSCapabilities';
-import XML from 'ol/format/XML';
-import { defaults as interaction_defaults, Select } from 'ol/interaction';
+import { defaults as interaction_defaults, Select, } from 'ol/interaction';
+import { SelectEvent } from 'ol/interaction/Select';
+import { Layer } from 'ol/layer';
 import HeatmapLayer from 'ol/layer/Heatmap';
 import ImageLayer from 'ol/layer/Image';
 import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat as proj_fromLonLat, toLonLat as proj_toLonLat } from 'ol/proj';
 import { register as proj4_register } from 'ol/proj/proj4';
+import RenderFeature from 'ol/render/Feature';
 import ImageWMSSource from 'ol/source/ImageWMS';
 import OSMSource from 'ol/source/OSM';
 import TileImageSource from 'ol/source/TileImage';
@@ -37,11 +43,10 @@ import CircleStyle from 'ol/style/Circle';
 import FillStyle from 'ol/style/Fill';
 import IconStyle from 'ol/style/Icon';
 import StrokeStyle from 'ol/style/Stroke';
-import Style from 'ol/style/Style';
+import { default as Style, StyleFunction } from 'ol/style/Style';
 import TextStyle from 'ol/style/Text';
-import { default as proj4 } from 'proj4';
 
-const formats: { [key: string]: typeof Feature } = {
+const formats: { [key: string]: typeof FeatureFormat } = {
   'EsriJSON': EsriJSON,
   'GeoJSON': GeoJSON,
   'GML2': GML2,
@@ -55,10 +60,7 @@ const formats: { [key: string]: typeof Feature } = {
   'TopoJSON': TopoJSON,
   'WFS': WFS,
   'WKT': WKT,
-  'WMSCapabilities': WMSCapabilities,
-  'WMSGetFeatureInfo': WMSGetFeatureInfo,
-  'WMTSCapabilities': WMTSCapabilities,
-  'XML': XML
+  'WMSGetFeatureInfo': WMSGetFeatureInfo
 };
 
 const supportedProjections = {
@@ -135,15 +137,15 @@ export interface MapLayer {
   style?: LayerStyle;
   selectedStyle?: LayerStyle;
   extraStyle?: LayerStyle;
-  scale?: { [key: string]: ol.Color };
+  scale?: { [key: string]: Color };
   scaleAttribute?: string;
   // No config - assigned at runtime
   olLayers: {
     [stage: string]: {
-      layer: ol.layer.Layer,
-      defaultStyleFn: ol.StyleFunction,
-      selectedStyleFn: ol.StyleFunction,
-      extraStyleFn: ol.StyleFunction
+      layer: Layer,
+      defaultStyleFn: StyleFunction,
+      selectedStyleFn: StyleFunction,
+      extraStyleFn: StyleFunction
     }
   };
 }
@@ -156,10 +158,10 @@ export interface Config {
 export class Map {
   baseLayers: MapLayer[] = [];
   topicLayers: MapLayer[] = [];
-  selectInteraction: ol.interaction.Select;
-  mapFeaturesById: { [key: string]: ol.Feature } = {};
-  private map: ol.Map;
-  private selectedLayer: ol.layer.Layer;
+  selectInteraction: Select;
+  mapFeaturesById: { [key: string]: Feature } = {};
+  private map: OlMap;
+  private selectedLayer?: Layer;
 
   constructor(private config: Config) {
     // Register unknown map projections
@@ -177,10 +179,45 @@ export class Map {
     });
 
     this.addLayers(this.config.baseLayers, this.config.topicLayers);
-    this.addSelectInteraction();
+
+    this.selectInteraction = new Select({
+      // Selectable layers
+      layers: this.topicLayers.filter(layer => layer.selectable).reduce<Layer[]>((layers, layer) => {
+        layers.push(... Object.values(layer.olLayers).map(olLayer => olLayer.layer));
+        return layers;
+      }, []),
+      // The filter function is hijacked in order to extract the association of the
+      // selected feature and the layer it belongs to, which is needed to define the
+      // style function (see below)
+      filter: (feature: FeatureLike, layer: Layer) => {
+        this.selectedLayer = layer;
+        return true;
+      },
+      // Because multiple select interactions for different layers don't work,
+      // the layer needs to be determined within the style function. This way we can
+      // use the styling associated with the layer the selected feature belongs to.
+      style: (feature: FeatureLike, resolution: number) => {
+        let selectedStyleFn;
+        for (const layer of this.topicLayers) {
+          for (const olLayer of Object.values(layer.olLayers)) {
+            if (getUid(olLayer.layer) === getUid(this.selectedLayer)) {
+              selectedStyleFn = olLayer.selectedStyleFn;
+              break;
+            }
+          }
+        }
+        if (typeof selectedStyleFn !== 'function') {
+          return new Style();
+        }
+        return selectedStyleFn(feature, resolution);
+      },
+      hitTolerance: 8
+    });
+
+    this.map.addInteraction(this.selectInteraction);
   }
 
-  on(type: string, listener: ol.EventsListenerFunctionType): void {
+  on(type: string, listener: ListenerFunction): void {
     this.map.on(type, listener);
   }
 
@@ -188,7 +225,7 @@ export class Map {
     this.map.setTarget(target);
   }
 
-  setView(center: ol.Coordinate, zoom: number, minZoom: number, maxZoom: number): void {
+  setView(center: Coordinate, zoom: number, minZoom: number, maxZoom: number): void {
     this.map.setView(new View({
       center: proj_fromLonLat(center),
       zoom: zoom,
@@ -201,11 +238,11 @@ export class Map {
     this.map.addOverlay(popup);
   }
 
-  getView(): ol.View {
+  getView(): View {
     return this.map.getView();
   }
 
-  extentContainsCoordinate(coordinate: ol.Coordinate): boolean {
+  extentContainsCoordinate(coordinate: Coordinate): boolean {
     const extent = this.map.getView().calculateExtent(this.map.getSize());
     return (
       coordinate[0] > extent[0] &&
@@ -215,14 +252,14 @@ export class Map {
     );
   }
 
-  featureBufferContainsCoordinate(featureId: string | number, coordinate: ol.Coordinate): boolean {
+  featureBufferContainsCoordinate(featureId: string | number, coordinate: Coordinate): boolean {
     const feature = this.mapFeaturesById[featureId];
     const buffer = extent_buffer(feature.getGeometry().getExtent(), 100);
     return extent_containsCoordinate(buffer, coordinate);
   }
 
   // Conversion from display XY to map coordinates
-  getCoordinateFromXY(x: number, y: number): ol.Coordinate | undefined {
+  getCoordinateFromXY(x: number, y: number): Coordinate | undefined {
     const coordinate = this.map.getCoordinateFromPixel([x * window.innerWidth, y * window.innerHeight]);
     if (!this.extentContainsCoordinate(coordinate)) {
       return;
@@ -257,8 +294,8 @@ export class Map {
     }
   }
 
-  getSelectedFeatures(coordinate: ol.Coordinate): ol.Feature[] {
-    let selectedFeatures: ol.Feature[] = [];
+  getSelectedFeatures(coordinate: Coordinate): Feature[] {
+    let selectedFeatures: Feature[] = [];
     for (const layer of this.topicLayers) {
       for (const olLayer of Object.values(layer.olLayers)) {
         const source = olLayer.layer.getSource();
@@ -271,7 +308,7 @@ export class Map {
     return selectedFeatures;
   }
 
-  getSelectedLayer(feature: ol.Feature, coordinate: ol.Coordinate): MapLayer | undefined {
+  getSelectedLayer(feature: Feature, coordinate: Coordinate): MapLayer | undefined {
     let selectedLayer;
     for (const layer of this.topicLayers) {
       for (const olLayer of Object.values(layer.olLayers)) {
@@ -325,21 +362,21 @@ export class Map {
   /*
    * transform xy to lon/lat
    */
-  fromLonLat(coordinate: ol.Coordinate): ol.Coordinate {
+  fromLonLat(coordinate: Coordinate): Coordinate {
     return proj_fromLonLat(coordinate);
   }
 
   /*
    * transform lon/lat to xy
    */
-  toLonLat(coordinate: ol.Coordinate): ol.Coordinate {
+  toLonLat(coordinate: Coordinate): Coordinate {
     return proj_toLonLat(coordinate);
   }
 
   /*
    * Create and dispatch a fake select event
    */
-  dispatchSelectEvent(layer: MapLayer, selected: ol.Feature[], coordinate: ol.Coordinate): void {
+  dispatchSelectEvent(layer: MapLayer, selected: Feature[], coordinate: Coordinate): void {
     for (const olLayer of Object.values(layer.olLayers)) {
       const source = <VectorSource>olLayer.layer.getSource();
       if (source.constructor !== VectorSource) {
@@ -347,7 +384,7 @@ export class Map {
       }
       const deselected = source.getFeatures().filter(feature => selected.indexOf(feature) === -1);
 
-      const selectEvent = <ol.interaction.Select.Event>{
+      const selectEvent = <SelectEvent>{
         type: 'select',
         selected: selected,
         deselected: deselected,
@@ -372,7 +409,7 @@ export class Map {
 
         // Set the default/selected styles for each vector layer
         if (olLayer.layer.constructor === VectorLayer) {
-          (<ol.layer.Vector>olLayer.layer).setStyle(olLayer.defaultStyleFn);
+          (<VectorLayer>olLayer.layer).setStyle(olLayer.defaultStyleFn);
         }
       }
     }
@@ -382,52 +419,14 @@ export class Map {
 
         // Set the default/selected styles for each vector layer
         if (olLayer.layer.constructor === VectorLayer) {
-          (<ol.layer.Vector>olLayer.layer).setStyle(olLayer.defaultStyleFn);
+          (<VectorLayer>olLayer.layer).setStyle(olLayer.defaultStyleFn);
         }
       }
     }
   }
-
-  private addSelectInteraction() {
-    this.selectInteraction = new Select({
-      // Selectable layers
-      layers: this.topicLayers.filter(layer => layer.selectable).reduce<ol.layer.Layer[]>((layers, layer) => {
-        layers.push(... Object.values(layer.olLayers).map(olLayer => olLayer.layer));
-        return layers;
-      }, []),
-      // The filter function is hijacked in order to extract the association of the
-      // selected feature and the layer it belongs to, which is needed to define the
-      // style function (see below)
-      filter: (feature: ol.render.Feature | ol.Feature, layer: ol.layer.Layer) => {
-        this.selectedLayer = layer;
-        return true;
-      },
-      // Because multiple select interactions for different layers don't work,
-      // the layer needs to be determined within the style function. This way we can
-      // use the styling associated with the layer the selected feature belongs to.
-      style: (feature: ol.render.Feature | ol.Feature, resolution: number) => {
-        let selectedStyleFn;
-        for (const layer of this.topicLayers) {
-          for (const olLayer of Object.values(layer.olLayers)) {
-            if (olLayer.layer.ol_uid === this.selectedLayer.ol_uid) {
-              selectedStyleFn = olLayer.selectedStyleFn;
-              break;
-            }
-          }
-        }
-        if (typeof selectedStyleFn !== 'function') {
-          return;
-        }
-        return selectedStyleFn(feature, resolution);
-      },
-      hitTolerance: 8
-    });
-
-    this.map.addInteraction(this.selectInteraction);
-  }
 }
 
-export function getFeatureCenterpoint(feature: ol.Feature): ol.Coordinate {
+export function getFeatureCenterpoint(feature: RenderFeature): Coordinate {
   return extent_getCenter(feature.getGeometry().getExtent());
 }
 
@@ -453,15 +452,9 @@ export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
       throw new Error('No sources provided for layer ' + layer.name);
     }
     for (const [key, source] of sourceEntries) {
-      const olLayer = layer.olLayers[key] = {
-        layer: null,
-        defaultStyleFn: null,
-        selectedStyleFn: null,
-        extraStyleFn: null
-      };
       switch (layer.type) {
         case 'OSM':
-          olLayer.layer = new TileLayer({
+          layer.olLayers[key].layer = new TileLayer({
             source: new OSMSource({
               url: source.url ? source.url : undefined
             }),
@@ -471,7 +464,7 @@ export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
           });
           break;
         case 'Tile':
-          olLayer.layer = new TileLayer({
+          layer.olLayers[key].layer = new TileLayer({
             source: new TileImageSource({
               url: source.url,
               projection: source.projection
@@ -486,7 +479,7 @@ export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
             throw new Error('No WMS params defined for layer ' + layer.name);
           }
           if (source.wmsParams.TILED) {
-            olLayer.layer = new TileLayer({
+            layer.olLayers[key].layer = new TileLayer({
               source: new TileWMSSource({
                 url: source.url,
                 params: source.wmsParams
@@ -496,7 +489,7 @@ export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
               visible: layer.visible
             });
           } else {
-            olLayer.layer = new ImageLayer({
+            layer.olLayers[key].layer = new ImageLayer({
               source: new ImageWMSSource({
                 url: source.url,
                 params: source.wmsParams,
@@ -512,7 +505,7 @@ export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
           if (!source.format || typeof formats[source.format] !== 'function') {
             throw new Error('No vector format provided for layer ' + layer.name);
           }
-          olLayer.layer = new VectorLayer({
+          layer.olLayers[key].layer = new VectorLayer({
             renderMode: 'image', // for performance
             source: new VectorSource({
               url: source.url,
@@ -530,12 +523,12 @@ export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
           if (!layer.weightAttribute || !layer.weightAttributeMax) {
             throw new Error('No weight attribute provided for layer ' + layer.name);
           }
-          olLayer.layer = new HeatmapLayer({
+          layer.olLayers[key].layer = new HeatmapLayer({
             source: new VectorSource({
               url: source.url,
               format: new formats[source.format]()
             }),
-            weight: layer.weightAttribute ? (feature: ol.Feature) => feature.get(layer.weightAttribute || '') / (layer.weightAttributeMax || 1) : () => 1,
+            weight: layer.weightAttribute ? (feature: Feature) => feature.get(layer.weightAttribute || '') / (layer.weightAttributeMax || 1) : () => 1,
             gradient: layer.gradient && layer.gradient.length > 1 ? layer.gradient : ['#0ff', '#0f0', '#ff0', '#f00'],
             radius: layer.radius !== undefined ? layer.radius : 16,
             blur: layer.blur !== undefined ? layer.blur : 30,
@@ -566,9 +559,9 @@ export function generateStyles(layers: MapLayer[]) {
   }
 }
 
-export function styleConfigToStyleFunction(style: LayerStyle, scale: { [key: string]: ol.Color } | undefined, scaleAttribute: string | undefined): ol.StyleFunction {
+export function styleConfigToStyleFunction(style: LayerStyle, scale: { [key: string]: Color } | undefined, scaleAttribute: string | undefined): StyleFunction {
   // Function to build a Fill object
-  const getFill = (feature: ol.render.Feature | ol.Feature) => {
+  const getFill = (feature: FeatureLike) => {
     if (!style.fill) {
       return;
     }
@@ -588,7 +581,7 @@ export function styleConfigToStyleFunction(style: LayerStyle, scale: { [key: str
   };
 
   // Function to build a Stroke object
-  const getStroke = (feature: ol.render.Feature | ol.Feature) => {
+  const getStroke = (feature: FeatureLike) => {
     if (!style.stroke) {
       return;
     }
@@ -613,7 +606,7 @@ export function styleConfigToStyleFunction(style: LayerStyle, scale: { [key: str
   const maxResolution = style.text && style.text.maxResolution ? style.text.maxResolution : Infinity;
 
   // Here the actual style function is returned
-  return (feature: ol.render.Feature | ol.Feature, resolution: number) => new Style({
+  return (feature: FeatureLike, resolution: number) => new Style({
     fill: style.fill ? getFill(feature) : undefined,
     stroke: style.stroke ? getStroke(feature) : undefined,
     image: style.circle ? new CircleStyle({
@@ -645,7 +638,7 @@ export function formatText(value: any, round: boolean): string {
   return '' + value;
 }
 
-export function getColorFromCategorizedScale(feature: ol.render.Feature | ol.Feature, attribute: string, scale: { [key: string]: ol.Color }): ol.Color {
+export function getColorFromCategorizedScale(feature: FeatureLike, attribute: string, scale: { [key: string]: Color }): Color {
   if (!scale) {
     throw new Error('Cannot apply style: scale is not defined');
   }
@@ -655,12 +648,12 @@ export function getColorFromCategorizedScale(feature: ol.render.Feature | ol.Fea
   if(!feature.get(attribute))
   {
     console.warn("Cannot apply style: null value in properties");
-    return <ol.Color>[0, 0, 0, 0];
+    return <Color>[0, 0, 0, 0];
   }
   return scale[feature.get(attribute)];
 }
 
-export function getColorFromGraduatedScale(feature: ol.render.Feature | ol.Feature, attribute: string, scale: { [key: string]: ol.Color }): ol.Color {
+export function getColorFromGraduatedScale(feature: FeatureLike, attribute: string, scale: { [key: string]: Color }): Color {
   if (!scale) {
     throw new Error('Cannot apply style: scale is not defined');
   }
@@ -673,7 +666,7 @@ export function getColorFromGraduatedScale(feature: ol.render.Feature | ol.Featu
   }
   if (isNaN(value)) {
     console.warn('Cannot apply style: value is not a number');
-    return <ol.Color>[0, 0, 0, 0];
+    return <Color>[0, 0, 0, 0];
   }
   return Object.keys(scale).reduce((previous, current) => {
     const limit = parseInt(current, 10);
@@ -681,5 +674,5 @@ export function getColorFromGraduatedScale(feature: ol.render.Feature | ol.Featu
       return previous;
     }
     return scale[current];
-  }, <ol.Color>[0, 0, 0, 0]);
+  }, <Color>[0, 0, 0, 0]);
 }
