@@ -143,7 +143,7 @@ export interface MapLayer {
   scale?: { [key: string]: Color };
   scaleAttribute?: string;
   // No config - assigned at runtime
-  olLayers: {
+  olLayers?: {
     [stage: string]: {
       layer: Layer,
       defaultStyleFn: StyleFunction,
@@ -186,6 +186,9 @@ export class CsMap {
     this.selectInteraction = new Select({
       // Selectable layers
       layers: this.topicLayers.filter(layer => layer.selectable).reduce<Layer[]>((layers, layer) => {
+        if (!layer.olLayers) {
+          layer.olLayers = {};
+        }
         layers.push(... Object.values(layer.olLayers).map(olLayer => olLayer.layer));
         return layers;
       }, []),
@@ -202,6 +205,9 @@ export class CsMap {
       style: (feature: FeatureLike, resolution: number) => {
         let selectedStyleFn;
         for (const layer of this.topicLayers) {
+          if (!layer.olLayers) {
+            layer.olLayers = {};
+          }
           for (const olLayer of Object.values(layer.olLayers)) {
             if (getUid(olLayer.layer) === getUid(this.selectedLayer)) {
               selectedStyleFn = olLayer.selectedStyleFn;
@@ -272,6 +278,9 @@ export class CsMap {
 
   applyDefaultStyle(featureId: string | number, layer: MapLayer) {
     const feature = this.mapFeaturesById[featureId];
+    if (!layer.olLayers) {
+      layer.olLayers = {};
+    }
     for (const olLayer of Object.values(layer.olLayers)) {
       if (olLayer.defaultStyleFn) {
         feature.setStyle(olLayer.defaultStyleFn);
@@ -281,6 +290,9 @@ export class CsMap {
 
   applySelectedStyle(featureId: string | number, layer: MapLayer) {
     const feature = this.mapFeaturesById[featureId];
+    if (!layer.olLayers) {
+      layer.olLayers = {};
+    }
     for (const olLayer of Object.values(layer.olLayers)) {
       if (olLayer.selectedStyleFn) {
         feature.setStyle(olLayer.selectedStyleFn);
@@ -290,6 +302,9 @@ export class CsMap {
 
   applyExtraStyle(featureId: string | number, layer: MapLayer) {
     const feature = this.mapFeaturesById[featureId];
+    if (!layer.olLayers) {
+      layer.olLayers = {};
+    }
     for (const olLayer of Object.values(layer.olLayers)) {
       if (olLayer.extraStyleFn) {
         feature.setStyle(olLayer.extraStyleFn);
@@ -300,6 +315,9 @@ export class CsMap {
   getSelectedFeatures(coordinate: Coordinate): Feature[] {
     let selectedFeatures: Feature[] = [];
     for (const layer of this.topicLayers) {
+      if (!layer.olLayers) {
+        layer.olLayers = {};
+      }
       for (const olLayer of Object.values(layer.olLayers)) {
         const source = olLayer.layer.getSource();
         if (source.constructor === VectorSource) {
@@ -314,6 +332,9 @@ export class CsMap {
   getSelectedLayer(feature: Feature, coordinate: Coordinate): MapLayer | undefined {
     let selectedLayer;
     for (const layer of this.topicLayers) {
+      if (!layer.olLayers) {
+        layer.olLayers = {};
+      }
       for (const olLayer of Object.values(layer.olLayers)) {
       const source = olLayer.layer.getSource();
         if (source.constructor === VectorSource) {
@@ -349,11 +370,17 @@ export class CsMap {
    */
   syncVisibleLayers(category?: string, stage?: string) {
     for (const layer of this.baseLayers) {
+      if (!layer.olLayers) {
+        layer.olLayers = {};
+      }
       for (const [key, olLayer] of Object.entries(layer.olLayers)) {
           olLayer.layer.setVisible(layer.visible&& (key === stage || key === '*'));
       }
     }
     for (const layer of this.topicLayers) {
+      if (!layer.olLayers) {
+        layer.olLayers = {};
+      }
       for (const [key, olLayer] of Object.entries(layer.olLayers)) {
         olLayer.layer.setVisible(layer.visible
           && (category !== null ? layer.category === category || !category : false)
@@ -380,6 +407,9 @@ export class CsMap {
    * Create and dispatch a fake select event
    */
   dispatchSelectEvent(layer: MapLayer, selected: Feature[], coordinate: Coordinate): void {
+    if (!layer.olLayers) {
+      layer.olLayers = {};
+    }
     for (const olLayer of Object.values(layer.olLayers)) {
       const source = <VectorSource>olLayer.layer.getSource();
       if (source.constructor !== VectorSource) {
@@ -407,6 +437,9 @@ export class CsMap {
     generateStyles(this.topicLayers);
 
     for (const layer of this.baseLayers) {
+      if (!layer.olLayers) {
+        layer.olLayers = {};
+      }
       for (const olLayer of Object.values(layer.olLayers)) {
         this.map.addLayer(olLayer.layer);
 
@@ -417,6 +450,9 @@ export class CsMap {
       }
     }
     for (const layer of this.topicLayers) {
+      if (!layer.olLayers) {
+        layer.olLayers = {};
+      }
       for (const olLayer of Object.values(layer.olLayers)) {
         this.map.addLayer(olLayer.layer);
 
@@ -548,6 +584,9 @@ export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
 
 export function generateStyles(layers: MapLayer[]) {
   for (const layer of layers) {
+    if (!layer.olLayers) {
+      layer.olLayers = {};
+    }
     for (const olLayer of Object.values(layer.olLayers)) {
       if (layer.style) {
         olLayer.defaultStyleFn = styleConfigToStyleFunction(layer.style, layer.scale, layer.scaleAttribute);

@@ -80,7 +80,7 @@ export interface MapLayer {
         [key: string]: Color;
     };
     scaleAttribute?: string;
-    olLayers: {
+    olLayers?: {
         [stage: string]: {
             layer: Layer;
             defaultStyleFn: StyleFunction;
