@@ -55,7 +55,7 @@ export interface LayerStyle {
 export interface MapLayer {
     name: string;
     displayName: string;
-    type: 'WMS' | 'OSM' | 'Tile' | 'Vector' | 'Heatmap';
+    type: string;
     source: Source;
     sources?: {
         [stage: string]: Source;
