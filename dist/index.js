@@ -355,6 +355,7 @@ export function generateLayers(layersConfig) {
             throw new Error('No sources provided for layer ' + layer.name);
         }
         for (const [key, source] of sourceEntries) {
+            layer.olLayers[key] = {};
             switch (layer.type) {
                 case 'OSM':
                     layer.olLayers[key].layer = new TileLayer({
