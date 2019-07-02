@@ -1,7 +1,3 @@
-// Undo this hack when proj4 has been fixed upstream
-import * as _proj4 from 'proj4';
-let proj4 = (_proj4 as any).default;
-
 import { getUid } from 'ol';
 import { default as Feature, FeatureLike } from 'ol/Feature';
 import Map from 'ol/Map';
@@ -48,6 +44,7 @@ import IconStyle from 'ol/style/Icon';
 import StrokeStyle from 'ol/style/Stroke';
 import { default as Style, StyleFunction } from 'ol/style/Style';
 import TextStyle from 'ol/style/Text';
+import proj4 from 'proj4';
 
 const formats: { [key: string]: typeof FeatureFormat } = {
   'EsriJSON': EsriJSON,
