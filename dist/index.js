@@ -395,7 +395,9 @@ export function generateLayers(layersConfig) {
                     else {
                         layer.olLayers[key].layer = new ImageLayer({
                             source: new ImageWMSSource({
-                                url: source.url,
+                                // In fact, 'url' is a required parameter for WMS, but due to overloading we cannot require
+                                // the source.url parameter in all cases
+                                url: source.url || '',
                                 params: source.wmsParams,
                                 projection: source.wmsProjection
                             }),

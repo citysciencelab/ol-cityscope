@@ -71,8 +71,11 @@ const supportedProjections = {
 };
 
 export interface Source {
-  url: string;
-  format: string;
+  // url parameter is required for most sources (not in preconfigured sources like OSM)
+  url?: string;
+  // format parameter is required for Vector sources
+  format?: string;
+  // the following are for WMS
   projection?: string;
   wmsParams?: { [key: string]: string | number | boolean };
   wmsProjection?: string;
@@ -530,7 +533,9 @@ export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {
           } else {
             layer.olLayers[key].layer = new ImageLayer({
               source: new ImageWMSSource({
-                url: source.url,
+                // In fact, 'url' is a required parameter for WMS, but due to overloading we cannot require
+                // the source.url parameter in all cases
+                url: source.url || '',
                 params: source.wmsParams,
                 projection: source.wmsProjection
               }),

@@ -9,8 +9,8 @@ import { Layer } from 'ol/layer';
 import RenderFeature from 'ol/render/Feature';
 import { StyleFunction } from 'ol/style/Style';
 export interface Source {
-    url: string;
-    format: string;
+    url?: string;
+    format?: string;
     projection?: string;
     wmsParams?: {
         [key: string]: string | number | boolean;
