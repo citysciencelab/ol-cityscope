@@ -1,7 +1,10 @@
-import * as proj4 from 'proj4';
+// Undo this hack when proj4 has been fixed upstream
+import * as _proj4 from 'proj4';
+let proj4 = (_proj4 as any).default;
+
 import { getUid } from 'ol';
 import { default as Feature, FeatureLike } from 'ol/Feature';
-import OlMap from 'ol/Map';
+import Map from 'ol/Map';
 import Overlay from 'ol/Overlay';
 import View from 'ol/View';
 import { Color } from 'ol/color';
@@ -155,12 +158,12 @@ export interface Config {
   topicLayers: MapLayer[];
 }
 
-export class Map {
+export class CsMap {
   baseLayers: MapLayer[] = [];
   topicLayers: MapLayer[] = [];
   selectInteraction: Select;
   mapFeaturesById: { [key: string]: Feature } = {};
-  private map: OlMap;
+  private map: Map;
   private selectedLayer?: Layer;
 
   constructor(private config: Config) {
@@ -170,7 +173,7 @@ export class Map {
     }
     proj4_register(proj4);
 
-    this.map = new OlMap({
+    this.map = new Map({
       controls: control_defaults().extend([new ScaleLine()]),
       interactions: interaction_defaults({
         altShiftDragRotate: false,

@@ -1,6 +1,8 @@
-import * as proj4 from 'proj4';
+// Undo this hack when proj4 has been fixed upstream
+import * as _proj4 from 'proj4';
+let proj4 = _proj4.default;
 import { getUid } from 'ol';
-import OlMap from 'ol/Map';
+import Map from 'ol/Map';
 import Overlay from 'ol/Overlay';
 import View from 'ol/View';
 import { defaults as control_defaults, ScaleLine } from 'ol/control';
@@ -56,7 +58,7 @@ const formats = {
 const supportedProjections = {
     'EPSG:25832': '+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'
 };
-export class Map {
+export class CsMap {
     constructor(config) {
         this.config = config;
         this.baseLayers = [];
@@ -67,7 +69,7 @@ export class Map {
             proj4.defs(code, def);
         }
         proj4_register(proj4);
-        this.map = new OlMap({
+        this.map = new Map({
             controls: control_defaults().extend([new ScaleLine()]),
             interactions: interaction_defaults({
                 altShiftDragRotate: false,
