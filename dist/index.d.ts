@@ -1,4 +1,5 @@
 import { default as Feature, FeatureLike } from 'ol/Feature';
+import Map from 'ol/Map';
 import Overlay from 'ol/Overlay';
 import View from 'ol/View';
 import { Color } from 'ol/color';
@@ -101,14 +102,14 @@ export declare class CsMap {
     mapFeaturesById: {
         [key: string]: Feature;
     };
-    private map;
+    map: Map;
     private selectedLayer?;
     constructor(config: Config);
     on(type: string, listener: ListenerFunction): void;
     setTarget(target: string): void;
+    getView(): View;
     setView(center: Coordinate, zoom: number, minZoom: number, maxZoom: number): void;
     setPopUp(popup: Overlay): void;
-    getView(): View;
     extentContainsCoordinate(coordinate: Coordinate): boolean;
     featureBufferContainsCoordinate(featureId: string | number, coordinate: Coordinate): boolean;
     getCoordinateFromXY(x: number, y: number): Coordinate | undefined;

@@ -163,7 +163,7 @@ export class CsMap {
   topicLayers: MapLayer[] = [];
   selectInteraction: Select;
   mapFeaturesById: { [key: string]: Feature } = {};
-  private map: Map;
+  map: Map;
   private selectedLayer?: Layer;
 
   constructor(private config: Config) {
@@ -234,6 +234,10 @@ export class CsMap {
     this.map.setTarget(target);
   }
 
+  getView(): View {
+    return this.map.getView();
+  }
+
   setView(center: Coordinate, zoom: number, minZoom: number, maxZoom: number): void {
     this.map.setView(new View({
       center: proj_fromLonLat(center),
@@ -245,10 +249,6 @@ export class CsMap {
 
   setPopUp(popup: Overlay) {
     this.map.addOverlay(popup);
-  }
-
-  getView(): View {
-    return this.map.getView();
   }
 
   extentContainsCoordinate(coordinate: Coordinate): boolean {

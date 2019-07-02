@@ -122,6 +122,9 @@ export class CsMap {
     setTarget(target) {
         this.map.setTarget(target);
     }
+    getView() {
+        return this.map.getView();
+    }
     setView(center, zoom, minZoom, maxZoom) {
         this.map.setView(new View({
             center: proj_fromLonLat(center),
@@ -132,9 +135,6 @@ export class CsMap {
     }
     setPopUp(popup) {
         this.map.addOverlay(popup);
-    }
-    getView() {
-        return this.map.getView();
     }
     extentContainsCoordinate(coordinate) {
         const extent = this.map.getView().calculateExtent(this.map.getSize());
