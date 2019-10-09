@@ -145,7 +145,11 @@ export class CsMap {
     }
     featureBufferContainsCoordinate(featureId, coordinate) {
         const feature = this.mapFeaturesById[featureId];
-        const buffer = extent_buffer(feature.getGeometry().getExtent(), 100);
+        const geometry = feature.getGeometry();
+        if (!geometry) {
+            return false;
+        }
+        const buffer = extent_buffer(geometry.getExtent(), 100);
         return extent_containsCoordinate(buffer, coordinate);
     }
     // Conversion from display XY to map coordinates
