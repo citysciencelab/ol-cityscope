@@ -32,7 +32,6 @@ import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat as proj_fromLonLat, toLonLat as proj_toLonLat } from 'ol/proj';
 import { register as proj4_register } from 'ol/proj/proj4';
-import RenderFeature from 'ol/render/Feature';
 import ImageWMSSource from 'ol/source/ImageWMS';
 import OSMSource from 'ol/source/OSM';
 import TileImageSource from 'ol/source/TileImage';
@@ -469,8 +468,12 @@ export class CsMap {
   }
 }
 
-export function getFeatureCenterpoint(feature: RenderFeature): Coordinate {
-  return extent_getCenter(feature.getGeometry().getExtent());
+export function getFeatureCenterpoint(feature: Feature): Coordinate | undefined {
+  const geometry = feature.getGeometry();
+  if (!geometry) {
+    return undefined;
+  }
+  return extent_getCenter(geometry.getExtent());
 }
 
 export function generateLayers(layersConfig: MapLayer[]): MapLayer[] {

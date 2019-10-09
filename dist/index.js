@@ -332,7 +332,11 @@ export class CsMap {
     }
 }
 export function getFeatureCenterpoint(feature) {
-    return extent_getCenter(feature.getGeometry().getExtent());
+    const geometry = feature.getGeometry();
+    if (!geometry) {
+        return undefined;
+    }
+    return extent_getCenter(geometry.getExtent());
 }
 export function generateLayers(layersConfig) {
     return layersConfig.map(layer => {

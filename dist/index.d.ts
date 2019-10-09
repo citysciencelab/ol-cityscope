@@ -7,7 +7,6 @@ import { Coordinate } from 'ol/coordinate';
 import { ListenerFunction } from 'ol/events';
 import { Select } from 'ol/interaction';
 import { Layer } from 'ol/layer';
-import RenderFeature from 'ol/render/Feature';
 import { StyleFunction } from 'ol/style/Style';
 export interface Source {
     url?: string;
@@ -131,7 +130,7 @@ export declare class CsMap {
     dispatchSelectEvent(layer: MapLayer, selected: Feature[], coordinate: Coordinate): void;
     private addLayers;
 }
-export declare function getFeatureCenterpoint(feature: RenderFeature): Coordinate;
+export declare function getFeatureCenterpoint(feature: Feature): Coordinate | undefined;
 export declare function generateLayers(layersConfig: MapLayer[]): MapLayer[];
 export declare function generateStyles(layers: MapLayer[]): void;
 export declare function styleConfigToStyleFunction(style: LayerStyle, scale: {
